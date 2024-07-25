@@ -1,0 +1,105 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#define MAX_COMMAND_LEN 256
+#define MAX_PATH_LEN 1024
+
+void create_file(char *path) {
+    FILE *file = fopen(path, "w");
+    if (file == NULL) {
+        perror("fopen");
+        return;
+    }
+    fclose(file);
+}
+
+void create_directory(char *path) {
+    if (mkdir(path, 0755) == -1) {
+        perror("mkdir");
+    }
+}
+
+void list_directory(char *path) {
+    struct dirent *entry;
+    DIR *dp = opendir(path);
+    if (dp == NULL) {
+        perror("opendir");
+        return;
+    }
+    while ((entry = readdir(dp))) {
+        printf("%s\n", entry->d_name);
+    }
+    closedir(dp);
+}
+
+void delete_file(char *path) {
+    if (remove(path) == -1) {
+        perror("remove");
+    }
+}
+
+void delete_directory(char *path) {
+    struct dirent *entry;
+    char full_path[MAX_PATH_LEN];
+    DIR *dp = opendir(path);
+    if (dp == NULL) {
+        perror("opendir");
+        return;
+    }
+    while ((entry = readdir(dp))) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        snprintf(full_path, sizeof(full_path), "%s/%s", path, entry->d_name);
+        struct stat statbuf;
+        if (stat(full_path, &statbuf) == -1) {
+            perror("stat");
+            continue;
+        }
+        if (S_ISDIR(statbuf.st_mode)) {
+            delete_directory(full_path);
+        } else {
+            delete_file(full_path);
+        }
+    }
+    closedir(dp);
+    if (rmdir(path) == -1) {
+        perror("rmdir");
+    }
+}
+
+int main() {
+    char command[MAX_COMMAND_LEN];
+    char arg[MAX_PATH_LEN];
+    while (1) {
+        printf("> ");
+        fgets(command, sizeof(command), stdin);
+        command[strcspn(command, "\n")] = '\0';
+
+        if (strncmp(command, "touch ", 6) == 0) {
+            strncpy(arg, command + 6, sizeof(arg));
+            create_file(arg);
+        } else if (strncmp(command, "mkdir ", 6) == 0) {
+            strncpy(arg, command + 6, sizeof(arg));
+            create_directory(arg);
+        } else if (strncmp(command, "ls ", 3) == 0) {
+            strncpy(arg, command + 3, sizeof(arg));
+            list_directory(arg);
+        } else if (strncmp(command, "rm ", 3) == 0) {
+            strncpy(arg, command + 3, sizeof(arg));
+            delete_file(arg);
+        } else if (strncmp(command, "rmdir ", 6) == 0) {
+            strncpy(arg, command + 6, sizeof(arg));
+            delete_directory(arg);
+        } else if (strcmp(command, "exit") == 0) {
+            break;
+        } else {
+            printf("Unknown command\n");
+        }
+    }
+    return 0;
+}
